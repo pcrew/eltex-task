@@ -32,11 +32,11 @@ static struct channel master_thread_ch = {0};
 static struct reactor *reactor = NULL;
 	  int sigusr1;
 
-struct master_info mi = {0};
+static struct master_info mi = {0};
 
-   int dev_random = -1;
+static    int dev_random = -1;
 
-  char buffer[4];
+static   char buffer[4];
 
 struct list_api *list = NULL;
 
@@ -85,7 +85,7 @@ void *master_thread_func(void *arg)
 	int ret;
 	
 	int fd = master_thread_ch.fd;
-	u32 srand;
+	u32 rand;
 
 	dev_random = open("/dev/random", O_RDONLY);
 	if (-1 == dev_random) {
@@ -105,15 +105,17 @@ void *master_thread_func(void *arg)
 		
 		pthread_mutex_lock(&mi.mutex);
 
-		ret = read(dev_random, &srand, sizeof(u32));
+		ret = read(dev_random, &rand, sizeof(u32));
 		if (ret != sizeof(u32)) {
 			log_err_msg("%s() - Can't read from 'dev/random'\n", __func__);
 			return NULL;
 		}
 
-		log_dbg_msg("%s() - rand: %d\n", __func__, srand % 1000);
+		rand = rand % 1000;
+
+		log_dbg_msg("%s() - rand: %d\n", __func__, rand);
 			
-		ret = reactor->arm_timerfd(fd, srand % 1000 + 1);
+		ret = reactor->arm_timerfd(fd, rand + 1);
 		if (ret) {
 			log_sys_msg("%s() - reactor->arm_timerfd() failed: %s\n", __func__, strerror(errno));
 			return NULL;
@@ -128,20 +130,36 @@ void *master_thread_func(void *arg)
 		pthread_cond_wait(&mi.wake_up, &mi.mutex);
 		mi.counter++;
 
-		memcpy(&buffer, &srand, 4);
-		
+		memcpy(&buffer, &rand, 4);
+	
+#if 0	
 		pthread_mutex_lock(&mi.list_mutex);
 
 		si = (struct slave_info *) list->get_head(&free_slaves);
 		if (NULL == si) {
-			/* TODO: Что делать в случае, если все рабы отдыхают? */
+			/* TODO: Что делать в случае, если все рабы отдыхают - создавать нового или ждать? */
 			printf("%s() - slave list empty\n", __func__);
 		}
 
-		pthread_cond_signal(&si->to_work);
-
 		pthread_mutex_unlock(&mi.list_mutex);
-		
+#endif
+
+#if 1
+		while (1) { /* Как же глупо, но пока так. :)  Вечером подумаю */
+
+			pthread_mutex_lock(&mi.list_mutex);
+			si = (struct slave_info *) list->get_head(&free_slaves);
+			
+			if (NULL != si) {
+				pthread_mutex_unlock(&mi.list_mutex);
+				break;
+			}
+
+			pthread_mutex_unlock(&mi.list_mutex);
+			sleep(2);
+		}
+#endif
+		pthread_cond_signal(&si->to_work);
 		pthread_mutex_unlock(&mi.mutex);
 	}
 
@@ -175,7 +193,7 @@ void *slave_thread_func(void *arg)
 		printf("%s()/%ld - buffer: %s\n", __func__, pthread_self(), buffer);	
 		si->counter++;
 		
-		ret = reactor->arm_timerfd(fd, 5);
+		ret = reactor->arm_timerfd(fd, 400);
 		if (ret) {
 			log_sys_msg("%s() - reactor->arm_timerfd() failed: %s\n", __func__, strerror(errno));
 			return NULL;
@@ -190,7 +208,7 @@ void *slave_thread_func(void *arg)
 		pthread_cond_wait(&si->wake_up, &si->mutex);
 
 		pthread_mutex_lock(&mi.list_mutex);
-		
+
 		ref = list->add_tail(&free_slaves);
 		*ref = si;	
 
