@@ -142,11 +142,12 @@ static struct epoll_event events[MAX_EVENTS];
 
 static int reactor_epoll__wait(void)
 {
-	struct signalfd_siginfo si = {0};
-	int nfds;
-	int ret;
-	int fd;
-	int i;
+static	struct signalfd_siginfo si = {0};
+static     u64 tick_cnt = 0;
+	   int nfds;
+	   int ret;
+	   int fd;
+	   int i;
 
 	nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1); /* infinit timeout */
 	if (unlikely(-1 == nfds)) {
@@ -159,13 +160,11 @@ static int reactor_epoll__wait(void)
 		ch = events[i].data.ptr;
 		fd = ch->fd;
 
-		u64 cnt;
-
 		switch(ch->type) {
 
 			case CH_TICK:
 
-				ret = read(fd, &cnt, 8);
+				ret = read(fd, &tick_cnt, 8);
 				if (ret != 8) {
 					log_sys_msg("%s() - read event error\n", __func__);
 					exit(1);

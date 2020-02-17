@@ -60,6 +60,7 @@ int signal_handler(struct channel *ch)
 
 	pthread_mutex_unlock(&mi->list_mutex);
 
+	printf("\n\n\n\n");
 	pthread_mutex_unlock(&mi->mutex);
 	return 0;
 }

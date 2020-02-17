@@ -36,7 +36,7 @@ static struct master_info mi = {0};
 
 static    int dev_random = -1;
 
-static   char buffer[4];
+static   char buffer[128];
 
 struct list_api *list = NULL;
 
@@ -128,9 +128,9 @@ void *master_thread_func(void *arg)
 		}
 
 		pthread_cond_wait(&mi.wake_up, &mi.mutex);
-		mi.counter++;
 
-		memcpy(&buffer, &rand, 4);
+		sprintf(buffer, "task: %d; time: %d", mi.counter, rand);
+		mi.counter++;
 	
 #if 0	
 		pthread_mutex_lock(&mi.list_mutex);
