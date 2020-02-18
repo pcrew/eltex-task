@@ -24,7 +24,7 @@
 #include "utils/backtrace.h"
 #include "utils/logging.h"
 
-#define NTHREADS	4
+#define NTHREADS	128
 
 static struct channel sig_ch = {0};
 static struct channel master_thread_ch = {0};
@@ -111,8 +111,8 @@ void *master_thread_func(void *arg)
 			return NULL;
 		}
 
-		rand = rand % 1000;
-
+//		rand = rand % 1000;
+		rand = rand % 50;
 		log_dbg_msg("%s() - rand: %d\n", __func__, rand);
 			
 		ret = reactor->arm_timerfd(fd, rand + 1);
@@ -145,7 +145,7 @@ void *master_thread_func(void *arg)
 #endif
 
 #if 1
-		while (1) { /* Как же глупо, но пока так. :)  Вечером подумаю */
+		while (1) { /* Как же глупо, но пока так. :)  Вечером подумаю. Не придумал, оставлю вот так */
 
 			pthread_mutex_lock(&mi.list_mutex);
 			si = (struct slave_info *) list->get_head(&free_slaves);
@@ -157,7 +157,7 @@ void *master_thread_func(void *arg)
 			
 			log_dbg_msg("%s() - wait for free slave\n", __func__);
 			pthread_mutex_unlock(&mi.list_mutex);
-			sleep(1);
+			usleep(300000);
 		}
 #endif
 		pthread_cond_signal(&si->to_work);
@@ -326,6 +326,9 @@ int init_slave_threads(void)
 		ch->thread_type = THREAD_SLAVE;
 		ch->data = si;
 
+		/* В листе "free_slaves" будут храниться только свободные листы
+		 * В листе "slaves" - все; он необходим, собственно, для 
+		 * обработчика сигнала SIGUSR1. */
 		si->mi = &mi;
 		ref = list->add_head(&free_slaves);
 		*ref = si;
