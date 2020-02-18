@@ -23,8 +23,6 @@ struct master_info {
 	pthread_mutex_t mutex;
 	pthread_mutex_t list_mutex;
 
-	char *buf;
-
 	struct list_api *list;
 	  void *free_slaves;
 	  void *slaves;	/* all slaves */

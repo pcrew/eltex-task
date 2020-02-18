@@ -22,6 +22,8 @@
 
 #include "handler.h"
 
+extern int errno;
+
 static int epollfd;
 static pthread_mutex_t mutex;
 
@@ -143,7 +145,7 @@ static struct epoll_event events[MAX_EVENTS];
 static int reactor_epoll__wait(void)
 {
 static	struct signalfd_siginfo si = {0};
-static     u64 tick_cnt = 0;
+static	   u64 tick_cnt = 0;
 	   int nfds;
 	   int ret;
 	   int fd;

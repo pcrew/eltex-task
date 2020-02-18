@@ -150,13 +150,14 @@ void *master_thread_func(void *arg)
 			pthread_mutex_lock(&mi.list_mutex);
 			si = (struct slave_info *) list->get_head(&free_slaves);
 			
-			if (NULL != si) {
+			if (likely(NULL != si)) {
 				pthread_mutex_unlock(&mi.list_mutex);
 				break;
 			}
-
+			
+			log_dbg_msg("%s() - wait for free slave\n", __func__);
 			pthread_mutex_unlock(&mi.list_mutex);
-			sleep(2);
+			sleep(1);
 		}
 #endif
 		pthread_cond_signal(&si->to_work);
@@ -212,8 +213,15 @@ void *slave_thread_func(void *arg)
 		ref = list->add_tail(&free_slaves);
 		*ref = si;	
 
-		pthread_mutex_unlock(&mi.list_mutex);
+#if 0	/* Сложность добавления в голову - 0(1), в хвост - O(n):
+	   	в первом случае - следуя Колмогорову, - почти наверное буду работать только первые два потока, остальные будут курить;
+		во втором случае потоки будут вызываться последовательно */
 
+		ref = list->add_head(&free_slaves);
+		*ref = si;
+#endif
+
+		pthread_mutex_unlock(&mi.list_mutex);
 		pthread_mutex_unlock(&si->mutex);		
 	}
 
