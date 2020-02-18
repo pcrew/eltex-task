@@ -14,7 +14,6 @@
 #include "reactor/reactor-api.h"
 
 #include "numeric-types.h"
-#include "data-buffer.h"
 #include "compiler.h"
 #include "channel.h"
 #include "api.h"
@@ -210,12 +209,14 @@ void *slave_thread_func(void *arg)
 
 		pthread_mutex_lock(&mi.list_mutex);
 
+#if 1
 		ref = list->add_tail(&free_slaves);
 		*ref = si;	
+#endif
 
 #if 0	/* Сложность добавления в голову - 0(1), в хвост - O(n):
-	   	в первом случае - следуя Колмогорову, - почти наверное буду работать только первые два потока, остальные будут курить;
-		во втором случае потоки будут вызываться последовательно */
+	   	в первом случае - следуя Колмогорову, - почти наверное буду работать только первые несколько потоков, остальные будут курить;
+		во втором случае потоки будут вызываться последовательн */
 
 		ref = list->add_head(&free_slaves);
 		*ref = si;
@@ -326,9 +327,12 @@ int init_slave_threads(void)
 		ch->thread_type = THREAD_SLAVE;
 		ch->data = si;
 
-		/* В листе "free_slaves" будут храниться только свободные листы
+		/* В листе "free_slaves" будут храниться только свободные ведомые нити.
 		 * В листе "slaves" - все; он необходим, собственно, для 
-		 * обработчика сигнала SIGUSR1. */
+		 * обработчика сигнала SIGUSR1.
+		 * Можно, конечно, держать два листа: free_slaves и wait_slaves, но тогда придётся
+		 * постоянно переставлять эти "Ханойские башни"; пусть существует лист или массив 
+		 * всех потоков, много жрать не просит. :)  */
 		si->mi = &mi;
 		ref = list->add_head(&free_slaves);
 		*ref = si;
