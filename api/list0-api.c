@@ -92,12 +92,16 @@ static void **list0__add_head(void **head)
 static void *list0__get_head(void **head)
 {
 	struct list0_node *node = *head;
+	  void *data;
 
 	if (NULL == node)
 		return NULL;
 
 	*head = node->next;
-	return node->dptr;
+	 data = node->dptr;
+
+	mplist0->put_block(__list0_mp, node);
+	return data;
 }
 
 static void *list0__get_tail(void **head)
