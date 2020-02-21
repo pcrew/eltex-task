@@ -175,9 +175,13 @@ void *slave_thread_func(void *arg)
 	  void **ref;
 	   int ret;
 	
-	   int fd = ch->fd;
+	ch->fd = reactor->new_timerfd();
+	if (-1 == ch->fd) {
+		log_sys_msg("%s() - reactor->new_timerfd() failed: %s\n", __func__, strerror(errno));
+		NULL;
+	}
 
-	ret = reactor->add(fd, ch);
+	ret = reactor->add(ch->fd, ch);
 	if (ret) {
 		log_err_msg("%s() - reactor->add() failed: %s\n", __func__, strerror(errno));
 		exit(1);
@@ -193,13 +197,13 @@ void *slave_thread_func(void *arg)
 		printf("%s()/%ld - buffer: %s\n", __func__, pthread_self(), buffer);	
 		si->counter++;
 		
-		ret = reactor->arm_timerfd(fd, 400);
+		ret = reactor->arm_timerfd(ch->fd, 400);
 		if (ret) {
 			log_sys_msg("%s() - reactor->arm_timerfd() failed: %s\n", __func__, strerror(errno));
 			return NULL;
 		}
 		
-		ret = reactor->mod(fd, ch, EPOLLIN);
+		ret = reactor->mod(ch->fd, ch, EPOLLIN);
 		if (ret) {
 			log_err_msg("%s() - reactor->mod() failed: %s\n", __func__, strerror(errno));
 			exit(1);
@@ -231,16 +235,23 @@ void *slave_thread_func(void *arg)
 
 int init_master_thread(void)
 {
-	pthread_t tid;
-	      int ret;
-	      int fd;
+	int ret;
+	int fd;
+	
+	master_thread_ch.type = CH_TICK;
+	master_thread_ch.thread_type = THREAD_MASTER;
+	master_thread_ch.data = &mi;
+	
+	mi.list = list;
+	mi.free_slaves = free_slaves;
+	mi.slaves = slaves;
 	
 	if (NULL == reactor) {
 		log_ops_msg("%s() - reactor api don't loaded\n", __func__);
 		exit(1);
 	}
 
-	ret = pthread_create(&tid, NULL, master_thread_func, NULL);
+	ret = pthread_create(&mi.tid, NULL, master_thread_func, NULL);
 	if (ret) {
 		log_sys_msg("%s() - pthread_create(): %s\n", __func__, strerror(errno));
 		return 1;
@@ -264,16 +275,6 @@ int init_master_thread(void)
 		return 1;
 	}
 
-	master_thread_ch.fd = fd;
-	master_thread_ch.type = CH_TICK;
-	master_thread_ch.thread_type = THREAD_MASTER;
-	master_thread_ch.data = &mi;
-	
-	mi.tid = tid;
-	mi.list = list;
-	mi.free_slaves = free_slaves;
-	mi.slaves = slaves;
-	
 	return 0;
 }
 
@@ -296,6 +297,23 @@ int init_slave_threads(void)
 			log_sys_msg("%s() - malloc(#%d) failed\n", __func__, i);
 			return 1;
 		}
+
+		ch->type = CH_TICK;
+		ch->thread_type = THREAD_SLAVE;
+		ch->data = si;
+
+		/* В листе "free_slaves" будут храниться только свободные ведомые нити.
+		 * В листе "slaves" - все; он необходим, собственно, для 
+		 * обработчика сигнала SIGUSR1.
+		 * Можно, конечно, держать два листа: free_slaves и wait_slaves, но тогда придётся
+		 * постоянно переставлять эти "Ханойские башни"; пусть существует лист или массив 
+		 * всех потоков, много жрать не просит. :)  */
+		si->mi = &mi;
+		ref = list->add_head(&free_slaves);
+		*ref = si;
+
+		ref = list->add_head(&slaves);
+		*ref = si;
 
 		ret = pthread_create(&si->tid, NULL, slave_thread_func, ch);
 		if (ret) {
@@ -321,24 +339,6 @@ int init_slave_threads(void)
 			log_sys_msg("%s() - pthread_cond_init() failed\n", __func__);
 			return 1;
 		}
-
-		ch->fd = fd;
-		ch->type = CH_TICK;
-		ch->thread_type = THREAD_SLAVE;
-		ch->data = si;
-
-		/* В листе "free_slaves" будут храниться только свободные ведомые нити.
-		 * В листе "slaves" - все; он необходим, собственно, для 
-		 * обработчика сигнала SIGUSR1.
-		 * Можно, конечно, держать два листа: free_slaves и wait_slaves, но тогда придётся
-		 * постоянно переставлять эти "Ханойские башни"; пусть существует лист или массив 
-		 * всех потоков, много жрать не просит. :)  */
-		si->mi = &mi;
-		ref = list->add_head(&free_slaves);
-		*ref = si;
-
-		ref = list->add_head(&slaves);
-		*ref = si;
 	}
 	
 	return 0;	      
