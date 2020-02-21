@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
 
 #include <sys/epoll.h>
 #include <sys/stat.h>
@@ -82,17 +83,21 @@ void *master_thread_func(void *arg)
 	struct slave_info *si;
 
 	int ret;
-	
-	int fd = master_thread_ch.fd;
 	u32 rand;
 
-	dev_random = open("/dev/random", O_RDONLY);
+	master_thread_ch.fd = reactor->new_timerfd();
+	if (-1 == master_thread_ch.fd) {
+		log_sys_msg("%s() - reactor->new_timerfd() failed: %s\n", __func__, strerror(errno));
+		exit(1);
+	}
+
+	dev_random = open("/dev/urandom", O_RDONLY);
 	if (-1 == dev_random) {
 		log_err_msg("%s() - Can't open 'dev/random'\n", __func__);
 		return NULL;
 	}
 
-	ret = reactor->add(fd, &master_thread_ch);
+	ret = reactor->add(master_thread_ch.fd, &master_thread_ch);
 	if (ret) {
 		log_err_msg("%s() - reactor->add() failed: %s\n", __func__, strerror(errno));
 		exit(1);
@@ -114,13 +119,13 @@ void *master_thread_func(void *arg)
 		rand = rand % 50;
 		log_dbg_msg("%s() - rand: %d\n", __func__, rand);
 			
-		ret = reactor->arm_timerfd(fd, rand + 1);
+		ret = reactor->arm_timerfd(master_thread_ch.fd, rand + 1);
 		if (ret) {
 			log_sys_msg("%s() - reactor->arm_timerfd() failed: %s\n", __func__, strerror(errno));
 			return NULL;
 		}
 		
-		ret = reactor->mod(fd, &master_thread_ch, EPOLLIN);
+		ret = reactor->mod(master_thread_ch.fd, &master_thread_ch, EPOLLIN);
 		if (ret) {
 			log_err_msg("%s() - reactor->mod() failed: %s\n", __func__, strerror(errno));
 			exit(1);
@@ -178,7 +183,7 @@ void *slave_thread_func(void *arg)
 	ch->fd = reactor->new_timerfd();
 	if (-1 == ch->fd) {
 		log_sys_msg("%s() - reactor->new_timerfd() failed: %s\n", __func__, strerror(errno));
-		NULL;
+		exit(1);
 	}
 
 	ret = reactor->add(ch->fd, ch);
